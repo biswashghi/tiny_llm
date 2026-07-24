@@ -1,0 +1,26 @@
+__pycache__/
+.venv/
+env/
+*.pyc
+
+# Training corpora and generated datasets are local experiment inputs.
+data/**/*.txt
+
+# Model checkpoints and ML/binary artifacts.
+*.pt
+checkpoints/
+*.bin
+*.safetensors
+*.onnx
+*.npy
+*.npz
+*.mlpackage/
+*.tokenizer.json
+
+# Evaluation reports are generated locally.
+runs/
+
+# OS/editor noise.
+.DS_Store
+.vscode/
+.idea/
