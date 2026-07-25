@@ -128,96 +128,12 @@ Compare:
 Loss values across tokenizers are not apples-to-apples because the prediction
 unit changed. Generated samples matter more for this comparison.
 
-## Latest Training Notes
+## Experiment Log
 
-The Sherlock BPE run improved substantially with more training:
+Ongoing training results, validation-loss observations, learning-rate notes,
+and architecture comparisons now live in
+[`experiment-log.md`](experiment-log.md).
 
-| Phase | Best validation loss | What changed |
-| --- | ---: | --- |
-| Initial BPE run | about `3.76` | Readable dialogue and better spelling |
-| Resumed long run | about `3.60` | Stronger Sherlock style and longer grammatical runs |
-
-The important lesson was not just "train longer." The validation curve kept
-improving, but it also bounced. After step `22000`, the best checkpoint was
-better than the final checkpoint. That taught two practical habits:
-
-| Habit | Reason |
-| --- | --- |
-| Save best validation checkpoints | The final step is not guaranteed to be best |
-| Decay the learning rate late in training | Smaller updates can refine instead of bouncing around |
-
-BPE also changed what sample quality means. The model now spells much better,
-but it still does not reason. It has learned local Doyle-like texture: dialogue,
-names, and common phrasing. Plot logic and stable facts require more capacity,
-longer context, better objectives, or a much larger pretrained model.
-
-## Learning-Rate Decay
-
-Training now defaults to cosine decay for each invocation:
-
-```bash
-python3 train.py --data data/cleaned/sherlock \
-  --resume checkpoints/tiny_transformer_best.pt \
-  --max-iters 8000 \
-  --learning-rate 1e-3 \
-  --min-learning-rate 1e-4 \
-  --lr-decay cosine
-```
-
-`--max-iters` is the length of the current run, so the cosine schedule decays
-over those additional steps. Use `--lr-decay none` to return to constant
-learning rate behavior.
-
-## Evaluation And Next Experiments
-
-The next workflow is deliberately more disciplined:
-
-```bash
-python3 evaluate.py --data data/cleaned/sherlock \
-  --checkpoint checkpoints/tiny_transformer_best.pt \
-  --save
-```
-
-That creates a repeatable report with measured train/validation loss, parameter
-count, checkpoint metadata, and the same prompt samples. Use it before and after
-each experiment.
-
-The longer-context experiment was slower and worse early on, which is useful
-evidence: attention cost rises quickly with context length. The next cheaper
-architecture experiment is to keep context at `128` and increase depth:
-
-```bash
-python3 train.py --data data/cleaned/sherlock \
-  --tokenizer bpe \
-  --vocab-size 2000 \
-  --context-length 128 \
-  --num-layers 6 \
-  --batch-size 16 \
-  --checkpoint checkpoints/tiny_transformer_layers6.pt \
-  --best-checkpoint checkpoints/tiny_transformer_layers6_best.pt
-```
-
-Use a separate checkpoint path because changing layer count changes the model
-shape. Resume is for continuing a compatible checkpoint; architecture
-experiments start a new checkpoint lineage.
-
-The 6-layer run got close to the 3-layer best but did not clearly beat it. The
-next experiment keeps context at `128`, uses `GELU` in the MLP, and ties the
-token embedding table to the output head:
-
-```bash
-python3 train.py --data data/cleaned/sherlock \
-  --tokenizer bpe \
-  --vocab-size 2000 \
-  --context-length 128 \
-  --num-layers 6 \
-  --activation gelu \
-  --tie-weights \
-  --batch-size 16 \
-  --checkpoint checkpoints/tiny_transformer_gelu_tied.pt \
-  --best-checkpoint checkpoints/tiny_transformer_gelu_tied_best.pt
-```
-
-This tests a more modern Transformer block without increasing context length.
-Old checkpoints remain compatible because missing metadata defaults to `relu`
-and untied weights.
+Keeping those notes separate makes this file easier to use as the tokenizer
+design reference, while the experiment log stays free to grow like a lab
+notebook.

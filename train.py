@@ -22,6 +22,7 @@ MAX_ITERS = 8_000
 EVAL_INTERVAL = 250
 LEARNING_RATE = 1e-3
 MIN_LEARNING_RATE = 1e-4
+GRAD_CLIP = 1.0
 SAMPLE_TEMPERATURE = 0.8
 SAMPLE_TOP_K = 20
 SAMPLE_TOP_P = 0.95
@@ -159,6 +160,15 @@ def parse_args():
         help="Learning-rate schedule for this run. Default: cosine",
     )
     parser.add_argument(
+        "--grad-clip",
+        type=float,
+        default=GRAD_CLIP,
+        help=(
+            "Clip gradients to this max norm before optimizer.step(). "
+            f"Use 0 to disable. Default: {GRAD_CLIP}"
+        ),
+    )
+    parser.add_argument(
         "--device",
         choices=DEVICE_CHOICES,
         default="auto",
@@ -266,6 +276,7 @@ def build_checkpoint(
     learning_rate: float,
     min_learning_rate: float,
     lr_decay: str,
+    grad_clip: float,
     iteration: int,
     train_loss: float,
     val_loss: float,
@@ -286,6 +297,7 @@ def build_checkpoint(
         "learning_rate": learning_rate,
         "min_learning_rate": min_learning_rate,
         "lr_decay": lr_decay,
+        "grad_clip": grad_clip,
         "iteration": iteration,
         "train_loss": train_loss,
         "val_loss": val_loss,
@@ -376,6 +388,8 @@ def main():
         raise ValueError("--min-learning-rate must be greater than 0")
     if args.min_learning_rate > args.learning_rate:
         raise ValueError("--min-learning-rate must be less than or equal to --learning-rate")
+    if args.grad_clip < 0:
+        raise ValueError("--grad-clip must be greater than or equal to 0")
 
     device = choose_device(args.device)
     text, data_files = load_training_text(args.data)
@@ -444,6 +458,10 @@ def main():
         )
     else:
         print(f"using learning rate: constant {args.learning_rate:g}")
+    if args.grad_clip > 0:
+        print(f"using gradient clipping: max norm {args.grad_clip:g}")
+    else:
+        print("using gradient clipping: disabled")
 
     split_idx = int(0.9 * len(data))
     # The validation split is held out from optimizer updates. If train loss
@@ -517,6 +535,7 @@ def main():
                         learning_rate=current_learning_rate,
                         min_learning_rate=args.min_learning_rate,
                         lr_decay=args.lr_decay,
+                        grad_clip=args.grad_clip,
                         iteration=iteration,
                         train_loss=losses["train"],
                         val_loss=losses["val"],
@@ -541,9 +560,13 @@ def main():
         # Standard training step:
         #   1. clear old gradients
         #   2. backprop computes d(loss)/d(parameter)
-        #   3. optimizer nudges parameters to reduce future loss
+        #   3. optionally clip huge gradients so one strange batch cannot make
+        #      an outsized parameter update
+        #   4. optimizer nudges parameters to reduce future loss
         optimizer.zero_grad(set_to_none=True)
         loss.backward()
+        if args.grad_clip > 0:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
         optimizer.step()
 
     losses = estimate_loss(
@@ -587,6 +610,7 @@ def main():
                 learning_rate=final_learning_rate,
                 min_learning_rate=args.min_learning_rate,
                 lr_decay=args.lr_decay,
+                grad_clip=args.grad_clip,
                 iteration=final_iteration,
                 train_loss=losses["train"],
                 val_loss=losses["val"],
@@ -616,6 +640,7 @@ def main():
             ),
             min_learning_rate=args.min_learning_rate,
             lr_decay=args.lr_decay,
+            grad_clip=args.grad_clip,
             iteration=final_iteration,
             train_loss=losses["train"],
             val_loss=losses["val"],

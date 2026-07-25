@@ -204,6 +204,7 @@ def format_report(
         f"- Dropout: `{checkpoint.get('dropout', 0.0)}`",
         f"- Activation: `{checkpoint.get('activation', 'relu')}`",
         f"- Weight tying: `{checkpoint.get('tie_weights', False)}`",
+        f"- Gradient clip: `{checkpoint.get('grad_clip', 'unknown')}`",
         f"- Parameters: `{parameter_count:,}`",
         f"- Eval batches: `{args.eval_batches}`",
         f"- Batch size: `{args.batch_size}`",
